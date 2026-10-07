@@ -1,0 +1,74 @@
+# WebmasterID consumer app — a Codemagic build with no secret of any kind.
+#
+# What Codemagic needs: read access to THIS repository. Nothing else — no
+# WebmasterID GitHub token, no deploy key, no access to any WebmasterID
+# repository: the SDK installs anonymously from pub.dev (the Flutter package),
+# from the public Swift package (iOS) and from https://webmasterid.com/sdk/maven
+# (Android). Release signing and store upload are a separate workflow of your
+# own; this one signs nothing and uploads nothing.
+#
+# MANUAL ONLY: no `triggering` section, so no push, tag or pull request starts
+# it. Start it from the Codemagic UI.
+workflows:
+  webmasterid-consumer:
+    name: WebmasterID consumer — analyze, test, Android release APK (R8), iOS Simulator
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: 3.47.6
+      xcode: "26.6"
+      java: 17
+      vars:
+        # Your property's PUBLIC id. It is not a secret; it ships in the app.
+        WMID_APP_PROPERTY_ID: "ap_xxxxxxxxxxxxxxxx"
+        # Empty = production. Only an acceptance run sets a test endpoint here.
+        WMID_ENDPOINT: ""
+    scripts:
+      - name: No WebmasterID credential on this machine (names only, never values)
+        script: |
+          set -euo pipefail
+          found="$(env | sed -nE 's/^([A-Z0-9_]*(SSH_KEY|GITHUB_TOKEN|GH_TOKEN|_PAT|PRIVATE_KEY)[A-Z0-9_]*)=.*/\1/p')"
+          [ -z "$found" ] || { echo "credential-like variables present: $found"; exit 1; }
+          keys="$(git config --global --name-only --get-regexp 'credential|insteadof' 2>/dev/null || true)"
+          [ -z "$keys" ] || { echo "git credential or URL rewrite configured: $keys"; exit 1; }
+          for f in "$HOME/.netrc" "$HOME/.git-credentials" "$HOME/.m2/settings.xml"; do
+            [ ! -e "$f" ] || { echo "credential file present: $f"; exit 1; }
+          done
+          echo "no WebmasterID credential: the SDK must install anonymously"
+      - name: Install — exactly the installation guide's one pubspec line
+        script: |
+          set -euo pipefail
+          flutter --version
+          flutter pub get
+          grep -A1 '"webmasterid_flutter"' pubspec.lock
+      - name: Analyze and test
+        script: |
+          set -euo pipefail
+          flutter analyze
+          flutter test
+      - name: Android — release APK with R8
+        script: |
+          set -euo pipefail
+          flutter build apk --release \
+            --dart-define=WMID_APP_PROPERTY_ID="$WMID_APP_PROPERTY_ID" \
+            --dart-define=WMID_ENDPOINT="$WMID_ENDPOINT"
+      - name: iOS — Simulator build (no signing)
+        script: |
+          set -euo pipefail
+          xcodebuild -version
+          flutter build ios --simulator --no-codesign \
+            --dart-define=WMID_APP_PROPERTY_ID="$WMID_APP_PROPERTY_ID" \
+            --dart-define=WMID_ENDPOINT="$WMID_ENDPOINT"
+      - name: What was resolved (the proof that no private source was used)
+        script: |
+          set -euo pipefail
+          echo "--- webmasterid_flutter from pub.dev:"; grep -B1 -A4 '^  webmasterid_flutter:' pubspec.lock
+          echo "--- iOS SDK (public Swift package, pinned by the plugin):"
+          find ios -name Package.resolved -exec cat {} \; | grep -A4 webmasterid-mobile-sdk || true
+          echo "--- Android SDK (public Maven):"
+          find "$HOME/.gradle/caches" -path '*com.webmasterid*' -name '*.pom' 2>/dev/null | head -5 || true
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
+      - build/app/outputs/mapping/release/mapping.txt
+      - build/ios/iphonesimulator/Runner.app
+      - pubspec.lock

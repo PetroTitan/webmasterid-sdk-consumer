@@ -1,0 +1,58 @@
+# The same build on GitHub Actions — no secret, no WebmasterID credential, no
+# access to any WebmasterID repository. Started by hand (workflow_dispatch).
+name: build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android:
+    name: Android — analyze, test, release APK (R8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          cache: false
+      - name: No WebmasterID credential on this machine
+        run: |
+          set -euo pipefail
+          keys="$(git config --global --name-only --get-regexp 'credential|insteadof' 2>/dev/null || true)"
+          [ -z "$keys" ] || { echo "git credential or URL rewrite configured: $keys"; exit 1; }
+          for f in "$HOME/.netrc" "$HOME/.git-credentials" "$HOME/.m2/settings.xml"; do
+            [ ! -e "$f" ] || { echo "credential file present: $f"; exit 1; }
+          done
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/mapping/release/mapping.txt
+            pubspec.lock
+  ios:
+    name: iOS — Simulator build (no signing)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          cache: false
+      - run: flutter pub get
+      - run: flutter build ios --simulator --no-codesign
+      - run: find ios -name Package.resolved -exec cat {} \;
