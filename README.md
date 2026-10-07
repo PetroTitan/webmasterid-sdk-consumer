@@ -12,10 +12,10 @@ package (iOS) and from `https://webmasterid.com/sdk/maven` (Android).
 
 ## Status
 
-**2026-10-07: the SDK packages are not published yet.** Until `webmasterid_flutter`
-0.3.0 is on pub.dev and the iOS and Android artifacts it pins are on their public
-channels, `flutter pub get` in this app fails with a version-solving error. That
-is expected; nothing here is misconfigured. This note is removed at publication.
+**Published 2026-10-07.** `webmasterid_flutter` 0.3.0 is on pub.dev; the iOS binary
+package it pins is `https://github.com/PetroTitan/webmasterid-mobile-sdk` 1.2.0 and the
+Android artifacts are at `https://webmasterid.com/sdk/maven` (0.2.0). `flutter pub get`
+in this app installs all three without any credential.
 
 ## Run it
 
