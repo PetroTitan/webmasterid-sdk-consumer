@@ -10,6 +10,13 @@ It contains no secret and needs no access to any WebmasterID repository. The
 SDK installs from pub.dev; the native SDKs it pins come from the public Swift
 package (iOS) and from `https://webmasterid.com/sdk/maven` (Android).
 
+## Status
+
+**2026-10-07: the SDK packages are not published yet.** Until `webmasterid_flutter`
+0.3.0 is on pub.dev and the iOS and Android artifacts it pins are on their public
+channels, `flutter pub get` in this app fails with a version-solving error. That
+is expected; nothing here is misconfigured. This note is removed at publication.
+
 ## Run it
 
 ```sh
