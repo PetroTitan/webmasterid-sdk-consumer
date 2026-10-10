@@ -4,8 +4,8 @@ A minimal customer app for the WebmasterID Flutter SDK. It follows the
 installation guide at https://webmasterid.com/docs/mobile-sdk step by step and
 nothing else: the package from pub.dev, the launch order (property id check →
 stored consent → initialize → lifecycle observer → session → identify or
-resetIdentity), a test event, and the diagnostics before and after an explicit
-flush that say whether the server took it.
+resetIdentity), a test event, and the diagnostics at once and ten seconds later
+that say whether the server took it — no flush(): the SDK delivers on its own.
 
 Its `lib/main.dart` and `codemagic.yaml` are the guide's, byte for byte. Besides
 `webmasterid_flutter` it uses `shared_preferences`, only to store the consent
@@ -17,10 +17,13 @@ package (iOS) and from `https://webmasterid.com/sdk/maven` (Android).
 
 ## Status
 
-**Published 2026-10-07.** `webmasterid_flutter` 0.3.0 is on pub.dev; the iOS binary
-package it pins is `https://github.com/PetroTitan/webmasterid-mobile-sdk` 1.2.0 and the
-Android artifacts are at `https://webmasterid.com/sdk/maven` (0.2.0). `flutter pub get`
-in this app installs all three without any credential.
+**Candidate — `webmasterid_flutter` 0.4.0 is NOT published yet.** This branch
+depends on `^0.4.0`, which pins the iOS binary package
+`https://github.com/PetroTitan/webmasterid-mobile-sdk` 1.3.0 and the Android
+artifacts 0.3.0 at `https://webmasterid.com/sdk/maven`. Until those are published
+`flutter pub get` cannot resolve it from pub.dev, and `pubspec.lock` still records
+0.3.0; regenerate it from pub.dev after the publication, before merging.
+(Published today: 0.3.0, with iOS 1.2.0 and Android 0.2.0.)
 
 ## Run it
 
@@ -37,16 +40,20 @@ Codemagic, set `WMID_APP_PROPERTY_ID` in `codemagic.yaml`; the build stops at
 its first step while it is empty. `WMID_ENDPOINT` is only for an acceptance run against
 an endpoint WebmasterID gave you; leave it unset for production.
 
-In the app: **Allow analytics** → **Send test event**. Diagnostics should show
-`acknowledged: 2`, `last status: success`. Then reload your app's page in the
-dashboard: the card reads **Receiving events** with the time of the last event.
+In the app: **Allow analytics** → **Send test event**. Ten seconds later the
+Diagnostics show `queued: 0`, `acknowledged: 2`, `last status: success`. Then
+reload your app's page in the dashboard: the card reads **Receiving events** with
+the time of the last event.
 
-**Delivery differs by platform.** `track`, `screenView` and `ctaTap` only queue.
-On iOS events leave the device only when the app calls `flush()` or reports the
-background transition — this app registers `WebmasterIDLifecycleObserver` for
-that, and its test event calls `flush()` once. On Android the native SDK also
-sends about 5 seconds after an event, so an app without the observer works on
-Android and keeps its events on iOS.
+**Delivery is the SDK's, on iOS and Android.** `track`, `screenView` and `ctaTap`
+only queue; the SDK sends about 5 seconds after the first queued event (later
+events join that request), when the app goes to the background, and after the
+next launch for anything left, and it retries failures on its own. **Deliver
+now** calls `flush()` — a boundary you choose, not something to call after every
+event. `WebmasterIDLifecycleObserver` is registered once and records `app_open`;
+delivery does not depend on it. Nothing runs after the app is suspended,
+force-quit or terminated: undelivered events stay on the device until it next
+runs.
 
 ## Build it on CI
 
