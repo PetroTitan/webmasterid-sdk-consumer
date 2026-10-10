@@ -1,9 +1,16 @@
 // A minimal customer app for the WebmasterID Flutter SDK.
 //
 // It does, in this order, what the installation guide says every app must do
-// at launch: restore the consent decision, start the SDK with it, restore the
-// app's own session, confirm who it is (or end the session an earlier launch
-// left behind), and only then send events.
+// at launch: check the build's property id, restore the consent decision,
+// start the SDK with it, register the lifecycle observer that delivers events,
+// restore the app's own session (only if the app has sign-in), and only then
+// send events. Its "Send test event" button is the first-event check: one
+// screen view, one tap, an explicit flush() and the diagnostics before and
+// after it.
+//
+// Dependencies (pubspec.yaml): webmasterid_flutter, and shared_preferences —
+// which only THIS example uses, to store the consent decision and the demo
+// session. Your app keeps both wherever it already keeps such things.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -115,7 +122,9 @@ Future<WebmasterID> startWebmasterID() async {
     endpoint: endpoint.isEmpty ? null : Uri.parse(endpoint),
   );
 
-  // 3. YOUR session, restored the way your app restores it.
+  // 3. Only if your app has sign-in: YOUR session, restored the way your app
+  //    restores it. An app without accounts leaves out steps 3 and 4; its
+  //    events carry no user, and nothing else changes.
   final accountKey = await session.restore();
 
   // 4. Confirm who it is — or end the session an earlier launch left behind.
@@ -158,8 +167,9 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> {
   WebmasterID? _webmasterID;
+  WebmasterIDLifecycleObserver? _lifecycle;
   WebmasterIDDiagnostics? _diagnostics;
   String? _accountKey;
   final List<String> _log = [];
@@ -167,48 +177,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _start();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    // The observer was registered by this screen, so it leaves with it. An
+    // observer registered once for the whole process needs no removal.
+    final lifecycle = _lifecycle;
+    if (lifecycle != null) WidgetsBinding.instance.removeObserver(lifecycle);
     super.dispose();
   }
 
   Future<void> _start() async {
     try {
       final webmasterID = await startWebmasterID();
+      if (!mounted) return;
+      // DELIVERY. On iOS the SDK sends ONLY when the app calls flush() or
+      // reports that it went to the background; this observer does the second
+      // (and records app_open each time the app comes back). On Android the
+      // native SDK also sends about 5 seconds after an event — so an app
+      // without this observer still works on Android and keeps its events on
+      // the device on iOS.
+      final lifecycle = WebmasterIDLifecycleObserver(
+        webmasterID,
+        onError: (error, _) =>
+            _say('lifecycle delivery failed: ${error.runtimeType}'),
+      );
+      WidgetsBinding.instance.addObserver(lifecycle);
+      _lifecycle = lifecycle;
       final accountKey = await session.restore();
+      if (!mounted) return;
       setState(() {
         _webmasterID = webmasterID;
         _accountKey = accountKey;
       });
       _say('SDK started for $appPropertyId'
           '${endpoint.isEmpty ? '' : ' → $endpoint'}');
-      await _refresh();
-    } catch (e) {
+      await _refresh('at start');
+    } on StateError catch (e) {
+      // The build's property id (requireAppPropertyId above): the message says
+      // what to fix and never repeats the configured value.
       _say('start failed: $e');
-    }
-  }
-
-  // The SDK observes nothing on its own: the app forwards the lifecycle, and
-  // going to the background delivers what is queued. On iOS nothing else
-  // sends: without this (or WebmasterIDLifecycleObserver, or flush()), events
-  // wait on the device. On Android the native SDK also sends about 5 seconds
-  // after an event.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    final webmasterID = _webmasterID;
-    if (webmasterID == null) return;
-    switch (state) {
-      case AppLifecycleState.resumed:
-        webmasterID.applicationDidBecomeActive();
-      case AppLifecycleState.paused:
-        webmasterID.applicationDidEnterBackground();
-      default:
-        break;
+    } on PlatformException catch (e) {
+      // The native SDK refused — consent_conflict, different_endpoint, …:
+      // reported by its code, never by the platform's message.
+      _say('start failed: native ${e.code}');
+    } on ArgumentError catch (e) {
+      // WMID_ENDPOINT is not https://host[:port].
+      _say('start failed: invalid ${e.name ?? 'argument'}');
+    } catch (e) {
+      _say('start failed: ${e.runtimeType}');
     }
   }
 
@@ -247,32 +266,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _refresh();
   }
 
-  /// One screen view and one tap, delivered now. Whether the server took them
-  /// is in diagnostics (acknowledged), not in the return values.
+  /// THE FIRST-EVENT CHECK: one screen view and one tap, the diagnostics, an
+  /// explicit flush() — the one moment this app delivers on purpose — and the
+  /// diagnostics again. Whether the server took the events is in
+  /// `acknowledged` and `last status`, not in the return values. Do not copy
+  /// a flush() after every event into your app: events are sent in batches,
+  /// and the lifecycle observer delivers them.
   Future<void> _sendTestEvent() async {
     final webmasterID = _webmasterID;
     if (webmasterID == null) return;
     final queuedView = await webmasterID.screenView('Home');
     final queuedTap =
         await webmasterID.ctaTap(cta: 'send_test_event', screen: 'Home');
+    _say('screen_view queued=$queuedView, cta_tap queued=$queuedTap');
+    await _refresh('before flush');
     final delivered = await webmasterID.flush();
-    _say('screen_view queued=$queuedView, cta_tap queued=$queuedTap, '
-        'flush made progress=$delivered');
-    await _refresh();
+    _say('flush made progress=$delivered');
+    await _refresh('after flush');
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh([String stage = 'now']) async {
     final webmasterID = _webmasterID;
     if (webmasterID == null) return;
     final diagnostics = await webmasterID.diagnostics();
     if (!mounted) return;
     setState(() => _diagnostics = diagnostics);
     if (diagnostics != null) {
-      // One line a log reader can grep for.
-      debugPrint('WMID_CONSUMER consent=${diagnostics.consent?.name} '
+      // One line a log reader can grep for. Categories and counts only.
+      debugPrint('WMID_CONSUMER diagnostics $stage: '
+          'consent=${diagnostics.consent?.name} '
           'queued=${diagnostics.queuedEvents} '
+          'attempted=${diagnostics.attempted} '
           'acknowledged=${diagnostics.acknowledged} '
           'status=${diagnostics.lastStatusCategory} '
+          'retry=${diagnostics.retryState} '
           'hold=${diagnostics.deliveryHold} '
           'identityStorage=${diagnostics.identityStorage}');
     }
@@ -311,7 +338,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ]),
           const SizedBox(height: 12),
-          const Text('2. Session'),
+          const Text('2. Session (only if your app has sign-in)'),
           Wrap(spacing: 8, children: [
             FilledButton(onPressed: _signIn, child: const Text('Sign in')),
             OutlinedButton(onPressed: _signOut, child: const Text('Sign out')),
@@ -332,6 +359,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 'attempted: ${d.attempted}'),
             Text('last status: ${d.lastStatusCategory}  '
                 'delivery hold: ${d.deliveryHold}'),
+            Text('retry: ${d.retryState}'
+                '${d.retryInSeconds == null ? '' : ' (after ${d.retryInSeconds!.round()} s)'}'),
             Text('identity storage: ${d.identityStorage}'),
           ],
           const SizedBox(height: 16),

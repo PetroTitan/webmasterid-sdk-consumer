@@ -2,9 +2,14 @@
 
 A minimal customer app for the WebmasterID Flutter SDK. It follows the
 installation guide at https://webmasterid.com/docs/mobile-sdk step by step and
-nothing else: one `pubspec.yaml` line, the launch order (consent → initialize →
-session → identify or resetIdentity), a test event, and the diagnostics that
-say whether the server took it.
+nothing else: the package from pub.dev, the launch order (property id check →
+stored consent → initialize → lifecycle observer → session → identify or
+resetIdentity), a test event, and the diagnostics before and after an explicit
+flush that say whether the server took it.
+
+Its `lib/main.dart` and `codemagic.yaml` are the guide's, byte for byte. Besides
+`webmasterid_flutter` it uses `shared_preferences`, only to store the consent
+decision and the demo session.
 
 It contains no secret and needs no access to any WebmasterID repository. The
 SDK installs from pub.dev; the native SDKs it pins come from the public Swift
@@ -36,11 +41,21 @@ In the app: **Allow analytics** → **Send test event**. Diagnostics should show
 `acknowledged: 2`, `last status: success`. Then reload your app's page in the
 dashboard: the card reads **Receiving events** with the time of the last event.
 
+**Delivery differs by platform.** `track`, `screenView` and `ctaTap` only queue.
+On iOS events leave the device only when the app calls `flush()` or reports the
+background transition — this app registers `WebmasterIDLifecycleObserver` for
+that, and its test event calls `flush()` once. On Android the native SDK also
+sends about 5 seconds after an event, so an app without the observer works on
+Android and keeps its events on iOS.
+
 ## Build it on CI
 
 - `codemagic.yaml` — Codemagic: analyze, test, Android release APK (R8), iOS
   Simulator build. Manual start, no signing, no secret, read access to this
-  repository only.
+  repository only. Its first step prints `this build sends to property ap_…`.
+  Your own release workflow passes the same `--dart-define` to `flutter build
+  ipa` and `flutter build appbundle` (the guide's section 7 shows it); define
+  `WMID_APP_PROPERTY_ID` in one place only — `vars` or a variable group.
 - `.github/workflows/build.yml` — the same on GitHub Actions (`workflow_dispatch`).
 
 ## Tests
