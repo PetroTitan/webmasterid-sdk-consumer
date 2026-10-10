@@ -22,6 +22,8 @@ workflows:
         # REQUIRED: your property's PUBLIC id, from the app's card in the
         # dashboard (ap_ + 16 lowercase letters or digits). It is not a secret;
         # it ships in the app. Left empty, the build stops at the next step.
+        # Define it in ONE place: here, or in a Codemagic variable group listed
+        # under `groups:` — then delete this line, so no empty value competes.
         WMID_APP_PROPERTY_ID: ""
         # Empty = production. Only an acceptance run sets a test endpoint here.
         WMID_ENDPOINT: ""
@@ -34,7 +36,8 @@ workflows:
             ap_xxxxxxxxxxxxxxxx) echo "WMID_APP_PROPERTY_ID is still the guide's placeholder."; exit 1 ;;
           esac
           [[ "$WMID_APP_PROPERTY_ID" =~ ^ap_[0-9a-z]{16}$ ]] || { echo "WMID_APP_PROPERTY_ID is not a public property id (ap_ + 16 lowercase letters or digits)."; exit 1; }
-          echo "property id: set"
+          # Public, so printed: compare it with the Public property ID on the app's card.
+          echo "this build sends to property $WMID_APP_PROPERTY_ID"
       - name: No WebmasterID credential on this machine (names only, never values)
         script: |
           set -euo pipefail
@@ -46,17 +49,18 @@ workflows:
             [ ! -e "$f" ] || { echo "credential file present: $f"; exit 1; }
           done
           echo "no WebmasterID credential: the SDK must install anonymously"
-      - name: Install — exactly the installation guide's one pubspec line
+      - name: Install — the pubspec's dependencies, from pub.dev
         script: |
           set -euo pipefail
           flutter --version
           flutter pub get
-          grep -A1 '"webmasterid_flutter"' pubspec.lock
+          # The lock entry pub wrote: hosted on https://pub.dev, and its version.
+          grep -A7 '^  webmasterid_flutter:' pubspec.lock
       - name: Analyze and test
         script: |
           set -euo pipefail
           flutter analyze
-          flutter test
+          if [ -d test ]; then flutter test; else echo "no test/ directory: nothing to run"; fi
       - name: Android — release APK with R8
         script: |
           set -euo pipefail
