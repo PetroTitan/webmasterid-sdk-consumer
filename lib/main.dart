@@ -9,13 +9,45 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webmasterid_flutter/webmasterid_flutter.dart';
 
-/// The app property's PUBLIC id, from the dashboard (iOS apps / Android apps).
+/// The app property's PUBLIC id, from the dashboard (iOS apps / Android apps),
+/// given at build time: --dart-define=WMID_APP_PROPERTY_ID=ap_…
 /// It ships inside the app and addresses your property; it is not a secret and
 /// it authenticates nothing. Never put a WebmasterID server key in an app.
-const String appPropertyId = String.fromEnvironment(
-  'WMID_APP_PROPERTY_ID',
-  defaultValue: 'ap_xxxxxxxxxxxxxxxx',
-);
+///
+/// There is deliberately NO default. A default that looks like an id builds,
+/// starts and sends — to no property — and the server answers every unknown id
+/// with the same 403, so nothing would say why nothing arrives.
+const String appPropertyId = String.fromEnvironment('WMID_APP_PROPERTY_ID');
+
+/// The placeholder earlier versions of the installation guide printed.
+const String guidePlaceholderPropertyId = 'ap_xxxxxxxxxxxxxxxx';
+
+/// The id this build will use — or a StateError when it is missing, still a
+/// placeholder, or not a public property id. It runs before the SDK is touched,
+/// so a misconfigured build fails here, on the device, and sends nothing.
+/// The message never repeats the value: whatever was configured by mistake
+/// stays out of logs.
+String requireAppPropertyId(String value) {
+  if (value.isEmpty) {
+    throw StateError(
+      'WMID_APP_PROPERTY_ID is not set. Build with '
+      '--dart-define=WMID_APP_PROPERTY_ID=<the Public property ID from the dashboard>.',
+    );
+  }
+  if (value == guidePlaceholderPropertyId) {
+    throw StateError(
+      "WMID_APP_PROPERTY_ID is still the guide's placeholder. Use the Public "
+      "property ID shown on your app's card in the dashboard.",
+    );
+  }
+  if (!RegExp(r'^ap_[0-9a-z]{16}$').hasMatch(value)) {
+    throw StateError(
+      'WMID_APP_PROPERTY_ID is not a public property id: "ap_" followed by '
+      '16 lowercase letters or digits, as shown in the dashboard.',
+    );
+  }
+  return value;
+}
 
 /// Leave empty for production. Set only for an acceptance run against an
 /// endpoint WebmasterID gave you for testing (https://host[:port]).
@@ -68,13 +100,16 @@ final session = Session();
 
 /// The launch order. Everything the SDK needs happens here, once per process.
 Future<WebmasterID> startWebmasterID() async {
+  // 0. The build's property id — refused here, before the SDK, when it is wrong.
+  final propertyId = requireAppPropertyId(appPropertyId);
+
   // 1. The decision this app stored — null if the person has not decided yet.
   final WebmasterIDConsent? consent = await consentStore.load();
 
   // 2. One client, started with that decision. Analytics only: no purchase
   //    collector is created, so no store framework is involved at runtime.
   final webmasterID = await WebmasterID.initialize(
-    appPropertyId: appPropertyId,
+    appPropertyId: propertyId,
     consent: consent,
     purchases: false,
     endpoint: endpoint.isEmpty ? null : Uri.parse(endpoint),
@@ -159,7 +194,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   // The SDK observes nothing on its own: the app forwards the lifecycle, and
-  // going to the background delivers what is queued.
+  // going to the background delivers what is queued. On iOS nothing else
+  // sends: without this (or WebmasterIDLifecycleObserver, or flush()), events
+  // wait on the device. On Android the native SDK also sends about 5 seconds
+  // after an event.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final webmasterID = _webmasterID;

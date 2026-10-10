@@ -21,11 +21,15 @@ in this app installs all three without any credential.
 
 ```sh
 flutter pub get
-flutter run --dart-define=WMID_APP_PROPERTY_ID=ap_xxxxxxxxxxxxxxxx
+flutter run --dart-define=WMID_APP_PROPERTY_ID=ap_YOUR_PROPERTY_ID
 ```
 
 `WMID_APP_PROPERTY_ID` is your app property's **public** id from the dashboard
-(iOS apps / Android apps). `WMID_ENDPOINT` is only for an acceptance run against
+(iOS apps / Android apps). Replace `ap_YOUR_PROPERTY_ID` with it: the app has no
+default id, and without a real one it stops at start with a StateError that
+says what is wrong — before the SDK is touched and before any request. In
+Codemagic, set `WMID_APP_PROPERTY_ID` in `codemagic.yaml`; the build stops at
+its first step while it is empty. `WMID_ENDPOINT` is only for an acceptance run against
 an endpoint WebmasterID gave you; leave it unset for production.
 
 In the app: **Allow analytics** → **Send test event**. Diagnostics should show
