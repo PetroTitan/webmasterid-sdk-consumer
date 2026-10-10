@@ -30,7 +30,45 @@ void main() {
     expect(await s.restore(), isNull);
   });
 
-  test('the property id is the public ap_ shape', () {
-    expect(RegExp(r'^ap_[0-9a-z]{16}$').hasMatch(appPropertyId), isTrue);
+  // The property id. This test used to assert that the DEFAULT id had the
+  // public shape — and the default was a placeholder that did, which is how a
+  // build could start and send to no property. There is no default now.
+  group('the property id', () {
+    test('a build without WMID_APP_PROPERTY_ID has no id at all', () {
+      // `flutter test` passes no --dart-define, exactly like a build that forgot it.
+      expect(appPropertyId, isEmpty);
+    });
+
+    test('missing: refused', () {
+      expect(() => requireAppPropertyId(''), throwsStateError);
+    });
+
+    test("the guide's old placeholder: refused by name", () {
+      expect(
+        () => requireAppPropertyId('ap_xxxxxxxxxxxxxxxx'),
+        throwsA(isA<StateError>().having((e) => e.message, 'message', contains('placeholder'))),
+      );
+    });
+
+    test('anything that is not a public property id: refused, without repeating it', () {
+      for (final value in ['ap_YOUR_PROPERTY_ID', 'AP_0123456789ABCDEF', 'ap_0123', ' ap_0123456789abcdef']) {
+        expect(
+          () => requireAppPropertyId(value),
+          throwsA(isA<StateError>().having((e) => e.message, 'message', isNot(contains(value)))),
+          reason: value,
+        );
+      }
+    });
+
+    test('a public property id passes unchanged', () {
+      expect(requireAppPropertyId('ap_0123456789abcdef'), 'ap_0123456789abcdef');
+    });
+
+    test('*** startWebmasterID refuses BEFORE the SDK: a StateError, not a platform error ***', () async {
+      // Were the SDK reached first, its platform channel (absent in a host
+      // test) would answer with a PlatformException instead.
+      SharedPreferences.setMockInitialValues({});
+      await expectLater(startWebmasterID(), throwsA(isA<StateError>()));
+    });
   });
 }

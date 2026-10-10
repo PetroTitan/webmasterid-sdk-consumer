@@ -19,11 +19,22 @@ workflows:
       xcode: "26.6"
       java: 17
       vars:
-        # Your property's PUBLIC id. It is not a secret; it ships in the app.
-        WMID_APP_PROPERTY_ID: "ap_xxxxxxxxxxxxxxxx"
+        # REQUIRED: your property's PUBLIC id, from the app's card in the
+        # dashboard (ap_ + 16 lowercase letters or digits). It is not a secret;
+        # it ships in the app. Left empty, the build stops at the next step.
+        WMID_APP_PROPERTY_ID: ""
         # Empty = production. Only an acceptance run sets a test endpoint here.
         WMID_ENDPOINT: ""
     scripts:
+      - name: The property id is set, and it is not a placeholder
+        script: |
+          set -euo pipefail
+          case "${WMID_APP_PROPERTY_ID:-}" in
+            "") echo "WMID_APP_PROPERTY_ID is empty: set your Public property ID from the dashboard."; exit 1 ;;
+            ap_xxxxxxxxxxxxxxxx) echo "WMID_APP_PROPERTY_ID is still the guide's placeholder."; exit 1 ;;
+          esac
+          [[ "$WMID_APP_PROPERTY_ID" =~ ^ap_[0-9a-z]{16}$ ]] || { echo "WMID_APP_PROPERTY_ID is not a public property id (ap_ + 16 lowercase letters or digits)."; exit 1; }
+          echo "property id: set"
       - name: No WebmasterID credential on this machine (names only, never values)
         script: |
           set -euo pipefail
