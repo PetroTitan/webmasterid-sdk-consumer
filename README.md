@@ -41,7 +41,7 @@ its first step while it is empty. `WMID_ENDPOINT` is only for an acceptance run 
 an endpoint WebmasterID gave you; leave it unset for production.
 
 In the app: **Allow analytics** → **Send test event**. Ten seconds later the
-Diagnostics show `queued: 0`, `acknowledged: 2`, `last status: success`. Then
+Diagnostics show `queuedEvents: 0`, `acknowledged: 2`, `last status: success`. Then
 reload your app's page in the dashboard: the card reads **Receiving events** with
 the time of the last event.
 

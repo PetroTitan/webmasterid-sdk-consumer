@@ -277,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final queuedTap =
         await webmasterID.ctaTap(cta: 'send_test_event', screen: 'Home');
     _say('screen_view queued=$queuedView, cta_tap queued=$queuedTap');
-    await _refresh('queued');
+    await _refresh('at once');
     await Future<void>.delayed(const Duration(seconds: 10));
     await _refresh('ten seconds later');
   }
@@ -303,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // One line a log reader can grep for. Categories and counts only.
       debugPrint('WMID_CONSUMER diagnostics $stage: '
           'consent=${diagnostics.consent?.name} '
-          'queued=${diagnostics.queuedEvents} '
+          'queuedEvents=${diagnostics.queuedEvents} '
           'attempted=${diagnostics.attempted} '
           'acknowledged=${diagnostics.acknowledged} '
           'status=${diagnostics.lastStatusCategory} '
@@ -369,7 +369,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const Text('not started')
           else ...[
             Text('consent: ${d.consent?.name ?? 'not decided'}'),
-            Text('queued: ${d.queuedEvents}  acknowledged: ${d.acknowledged}  '
+            Text('queuedEvents: ${d.queuedEvents}  acknowledged: ${d.acknowledged}  '
                 'attempted: ${d.attempted}'),
             Text('last status: ${d.lastStatusCategory}  '
                 'delivery hold: ${d.deliveryHold}'),
