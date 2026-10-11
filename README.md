@@ -17,13 +17,13 @@ package (iOS) and from `https://webmasterid.com/sdk/maven` (Android).
 
 ## Status
 
-**Candidate — `webmasterid_flutter` 0.4.0 is NOT published yet.** This branch
-depends on `^0.4.0`, which pins the iOS binary package
-`https://github.com/PetroTitan/webmasterid-mobile-sdk` 1.3.0 and the Android
-artifacts 0.3.0 at `https://webmasterid.com/sdk/maven`. Until those are published
-`flutter pub get` cannot resolve it from pub.dev, and `pubspec.lock` still records
-0.3.0; regenerate it from pub.dev after the publication, before merging.
-(Published today: 0.3.0, with iOS 1.2.0 and Android 0.2.0.)
+**Published — `webmasterid_flutter` 0.4.0 is available on pub.dev.** It pins
+the public iOS binary package `https://github.com/PetroTitan/webmasterid-mobile-sdk`
+1.3.0 and Android artifacts 0.3.0 at `https://webmasterid.com/sdk/maven`.
+`pubspec.lock` was regenerated from pub.dev with an empty package cache;
+the package archive SHA-256 is
+`a41c76a2bfc26e890510758b4de6154d62a29e6225772b6151ed0ba6f6bb1f04`.
+The earlier published versions remain available and unchanged.
 
 ## Run it
 
