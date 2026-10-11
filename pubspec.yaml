@@ -11,7 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   # The WebmasterID SDK, from pub.dev. No Git URL, no path, no override.
-  webmasterid_flutter: ^0.3.0
+  webmasterid_flutter: ^0.4.0
   # Where this app keeps the consent decision between launches.
   shared_preferences: ^2.3.0
 

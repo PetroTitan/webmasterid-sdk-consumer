@@ -2,11 +2,11 @@
 //
 // It does, in this order, what the installation guide says every app must do
 // at launch: check the build's property id, restore the consent decision,
-// start the SDK with it, register the lifecycle observer that delivers events,
-// restore the app's own session (only if the app has sign-in), and only then
-// send events. Its "Send test event" button is the first-event check: one
-// screen view, one tap, an explicit flush() and the diagnostics before and
-// after it.
+// start the SDK with it, register the lifecycle observer once, restore the
+// app's own session (only if the app has sign-in), and only then send events.
+// Its "Send test event" button is the first-event check: one screen view, one
+// tap, and the diagnostics at once and ten seconds later — no flush(): the
+// SDK delivers on its own. "Deliver now" is flush(), for a boundary you choose.
 //
 // Dependencies (pubspec.yaml): webmasterid_flutter, and shared_preferences —
 // which only THIS example uses, to store the consent decision and the demo
@@ -193,16 +193,15 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final webmasterID = await startWebmasterID();
       if (!mounted) return;
-      // DELIVERY. On iOS the SDK sends ONLY when the app calls flush() or
-      // reports that it went to the background; this observer does the second
-      // (and records app_open each time the app comes back). On Android the
-      // native SDK also sends about 5 seconds after an event — so an app
-      // without this observer still works on Android and keeps its events on
-      // the device on iOS.
+      // The lifecycle observer, ONCE for the process: it records app_open each
+      // time the app comes back to the foreground. Delivery does not depend on
+      // it — the SDK sends on its own, on iOS and Android: about 5 seconds
+      // after an event, when the app goes to the background, and after the
+      // next launch for anything left.
       final lifecycle = WebmasterIDLifecycleObserver(
         webmasterID,
         onError: (error, _) =>
-            _say('lifecycle delivery failed: ${error.runtimeType}'),
+            _say('lifecycle observer failed: ${error.runtimeType}'),
       );
       WidgetsBinding.instance.addObserver(lifecycle);
       _lifecycle = lifecycle;
@@ -266,12 +265,11 @@ class _HomeScreenState extends State<HomeScreen> {
     await _refresh();
   }
 
-  /// THE FIRST-EVENT CHECK: one screen view and one tap, the diagnostics, an
-  /// explicit flush() — the one moment this app delivers on purpose — and the
-  /// diagnostics again. Whether the server took the events is in
-  /// `acknowledged` and `last status`, not in the return values. Do not copy
-  /// a flush() after every event into your app: events are sent in batches,
-  /// and the lifecycle observer delivers them.
+  /// THE FIRST-EVENT CHECK: one screen view and one tap, then the diagnostics
+  /// at once and ten seconds later. Nothing here sends: the SDK delivers on
+  /// its own about 5 seconds after the first event. Whether the server took
+  /// the events is in `acknowledged` and `last status` of the second reading,
+  /// not in the return values.
   Future<void> _sendTestEvent() async {
     final webmasterID = _webmasterID;
     if (webmasterID == null) return;
@@ -279,7 +277,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final queuedTap =
         await webmasterID.ctaTap(cta: 'send_test_event', screen: 'Home');
     _say('screen_view queued=$queuedView, cta_tap queued=$queuedTap');
-    await _refresh('before flush');
+    await _refresh('queued');
+    await Future<void>.delayed(const Duration(seconds: 10));
+    await _refresh('ten seconds later');
+  }
+
+  /// A BOUNDARY YOU CHOOSE: deliver what is queued now and wait for the
+  /// server's answer — before a test ends, say. Not needed for delivery, and
+  /// never after every event: events are sent in batches.
+  Future<void> _deliverNow() async {
+    final webmasterID = _webmasterID;
+    if (webmasterID == null) return;
     final delivered = await webmasterID.flush();
     _say('flush made progress=$delivered');
     await _refresh('after flush');
@@ -345,10 +353,16 @@ class _HomeScreenState extends State<HomeScreen> {
           ]),
           const SizedBox(height: 12),
           const Text('3. Events'),
-          FilledButton(
-            onPressed: _sendTestEvent,
-            child: const Text('Send test event'),
-          ),
+          Wrap(spacing: 8, children: [
+            FilledButton(
+              onPressed: _sendTestEvent,
+              child: const Text('Send test event'),
+            ),
+            OutlinedButton(
+              onPressed: _deliverNow,
+              child: const Text('Deliver now'),
+            ),
+          ]),
           const SizedBox(height: 16),
           const Text('Diagnostics', style: TextStyle(fontWeight: FontWeight.bold)),
           if (d == null)
