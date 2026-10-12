@@ -337,10 +337,10 @@ packages:
     dependency: "direct main"
     description:
       name: webmasterid_flutter
-      sha256: a41c76a2bfc26e890510758b4de6154d62a29e6225772b6151ed0ba6f6bb1f04
+      sha256: "2a2023df4f930cd54d87adf3e517571952b546b574857f0655aa1e56a49e7bcf"
       url: "https://pub.dev"
     source: hosted
-    version: "0.4.0"
+    version: "0.4.1"
   xdg_directories:
     dependency: transitive
     description:
